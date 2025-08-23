@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/worker.dart';
 import 'worker_dashboard_screen.dart';
 import 'monthly_report_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class WorkerListScreen extends StatelessWidget {
   const WorkerListScreen({Key? key}) : super(key: key);
@@ -43,8 +44,10 @@ class WorkerListScreen extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () {
-                if (nameController.text.isNotEmpty && wageController.text.isNotEmpty) {
-                  Provider.of<WorkerListModel>(context, listen: false).addWorker(
+                if (nameController.text.isNotEmpty &&
+                    wageController.text.isNotEmpty) {
+                  Provider.of<WorkerListModel>(context, listen: false)
+                      .addWorker(
                     Worker(
                       name: nameController.text,
                       dailyWage: double.tryParse(wageController.text) ?? 0.0,
@@ -61,9 +64,11 @@ class WorkerListScreen extends StatelessWidget {
     );
   }
 
-  void _showEditWorkerDialog(BuildContext context, Worker worker, WorkerListModel workerList) {
+  void _showEditWorkerDialog(
+      BuildContext context, Worker worker, WorkerListModel workerList) {
     final nameController = TextEditingController(text: worker.name);
-    final wageController = TextEditingController(text: worker.dailyWage.toStringAsFixed(2));
+    final wageController =
+        TextEditingController(text: worker.dailyWage.toStringAsFixed(2));
     final screenWidth = MediaQuery.of(context).size.width;
     showDialog(
       context: context,
@@ -97,9 +102,11 @@ class WorkerListScreen extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () {
-                if (nameController.text.isNotEmpty && wageController.text.isNotEmpty) {
+                if (nameController.text.isNotEmpty &&
+                    wageController.text.isNotEmpty) {
                   worker.name = nameController.text;
-                  worker.dailyWage = double.tryParse(wageController.text) ?? worker.dailyWage;
+                  worker.dailyWage =
+                      double.tryParse(wageController.text) ?? worker.dailyWage;
                   workerList.updateWorker();
                   Navigator.pop(context);
                 }
@@ -123,6 +130,9 @@ class WorkerListScreen extends StatelessWidget {
     final padding = isTablet ? 32.0 : 16.0;
     final cardColor = Colors.blue.shade50;
     final tileColor = Colors.blue.shade50;
+
+    // Firebase connection check banner
+    final firebaseConnected = Firebase.apps.isNotEmpty;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Workers'),
@@ -147,7 +157,26 @@ class WorkerListScreen extends StatelessWidget {
                 height: 56,
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.add),
-                  label: Text('Add Worker', style: TextStyle(fontSize: buttonFontSize)),
+                  label: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Add Worker',
+                          style: TextStyle(fontSize: buttonFontSize)),
+                      if (!firebaseConnected)
+                        Container(
+                          width: double.infinity,
+                          color: Colors.red,
+                          padding: const EdgeInsets.all(8),
+                          child: const Text(
+                            'Not connected to Firebase!',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                    ],
+                  ),
                   onPressed: () => _showAddWorkerDialog(context),
                 ),
               ),
@@ -156,7 +185,8 @@ class WorkerListScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: ListView.builder(
-                    padding: EdgeInsets.symmetric(vertical: padding, horizontal: padding),
+                    padding: EdgeInsets.symmetric(
+                        vertical: padding, horizontal: padding),
                     itemCount: workerList.workers.length,
                     itemBuilder: (context, index) {
                       final worker = workerList.workers[index];
@@ -165,16 +195,21 @@ class WorkerListScreen extends StatelessWidget {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        margin: EdgeInsets.symmetric(vertical: 8, horizontal: isTablet ? 32 : 0),
+                        margin: EdgeInsets.symmetric(
+                            vertical: 8, horizontal: isTablet ? 32 : 0),
                         child: ListTile(
                           tileColor: tileColor,
-                          title: Text(worker.name, style: TextStyle(fontSize: tileFontSize)),
-                          subtitle: Text('₹${worker.dailyWage.toStringAsFixed(2)} per day', style: TextStyle(fontSize: tileFontSize * 0.85)),
+                          title: Text(worker.name,
+                              style: TextStyle(fontSize: tileFontSize)),
+                          subtitle: Text(
+                              '₹${worker.dailyWage.toStringAsFixed(2)} per day',
+                              style: TextStyle(fontSize: tileFontSize * 0.85)),
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => WorkerDashboardScreen(worker: worker),
+                                builder: (_) =>
+                                    WorkerDashboardScreen(worker: worker),
                               ),
                             );
                           },
@@ -183,7 +218,8 @@ class WorkerListScreen extends StatelessWidget {
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.edit),
-                                onPressed: () => _showEditWorkerDialog(context, worker, workerList),
+                                onPressed: () => _showEditWorkerDialog(
+                                    context, worker, workerList),
                                 tooltip: 'Edit',
                               ),
                               IconButton(
@@ -193,14 +229,17 @@ class WorkerListScreen extends StatelessWidget {
                                     context: context,
                                     builder: (context) => AlertDialog(
                                       title: const Text('Delete Worker'),
-                                      content: const Text('Are you sure you want to delete this worker? This action cannot be undone.'),
+                                      content: const Text(
+                                          'Are you sure you want to delete this worker? This action cannot be undone.'),
                                       actions: [
                                         TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
+                                          onPressed: () =>
+                                              Navigator.pop(context, false),
                                           child: const Text('No'),
                                         ),
                                         ElevatedButton(
-                                          onPressed: () => Navigator.pop(context, true),
+                                          onPressed: () =>
+                                              Navigator.pop(context, true),
                                           child: const Text('Yes'),
                                         ),
                                       ],
@@ -226,7 +265,8 @@ class WorkerListScreen extends StatelessWidget {
                     height: 56,
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.add),
-                      label: Text('Add Worker', style: TextStyle(fontSize: buttonFontSize)),
+                      label: Text('Add Worker',
+                          style: TextStyle(fontSize: buttonFontSize)),
                       onPressed: () => _showAddWorkerDialog(context),
                     ),
                   ),
@@ -235,4 +275,4 @@ class WorkerListScreen extends StatelessWidget {
             ),
     );
   }
-} 
+}
