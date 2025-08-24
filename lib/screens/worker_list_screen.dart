@@ -103,10 +103,14 @@ class WorkerListScreen extends StatelessWidget {
               onPressed: () {
                 if (nameController.text.isNotEmpty &&
                     wageController.text.isNotEmpty) {
-                  worker.name = nameController.text;
-                  worker.dailyWage =
-                      double.tryParse(wageController.text) ?? worker.dailyWage;
-                  workerList.updateWorker();
+                  final updatedWorker = Worker(
+                    name: nameController.text,
+                    dailyWage: double.tryParse(wageController.text) ??
+                        worker.dailyWage,
+                    id: worker.id,
+                  );
+                  workerList.updateWorker(
+                      workerList.workers.indexOf(worker), updatedWorker);
                   Navigator.pop(context);
                 }
               },

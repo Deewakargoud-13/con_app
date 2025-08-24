@@ -1,32 +1,49 @@
 import 'package:flutter/material.dart';
 import '../models/worker.dart';
 import '../models/attendance.dart';
-import '../models/payment.dart';
+// Removed unused import '../models/payment.dart';
+// import '../services/supabase_service.dart';
+// import '../widgets/attendance_selector.dart';
+// Removed unused import '../widgets/wage_display.dart';
+// import '../widgets/advance_editor.dart';
+// Removed unused import '../widgets/payment_buttons.dart';
+// import '../widgets/month_selector.dart';
 import '../services/supabase_service.dart';
 import '../widgets/attendance_selector.dart';
-import '../widgets/wage_display.dart';
 import '../widgets/advance_editor.dart';
-import '../widgets/payment_buttons.dart';
 import '../widgets/month_selector.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 
-double calculateFinalPending(List<AttendanceRecord> attendance, List<AdvanceRecord> advances, double dailyWage, DateTime month) {
+double calculateFinalPending(List<AttendanceRecord> attendance,
+    List<AdvanceRecord> advances, double dailyWage, DateTime month) {
   final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
   List<MapEntry<DateTime, double>> pendingQueue = [];
   double carryForward = 0.0;
   for (int i = 1; i <= daysInMonth; i++) {
     final date = DateTime(month.year, month.month, i);
     final att = attendance.firstWhere(
-      (a) => a.date.year == date.year && a.date.month == date.month && a.date.day == date.day,
+      (a) =>
+          a.date.year == date.year &&
+          a.date.month == date.month &&
+          a.date.day == date.day,
       orElse: () => AttendanceRecord(date: date, type: AttendanceType.absent),
     );
-    final wage = dailyWage * (att.type == AttendanceType.full ? 1.0 : att.type == AttendanceType.half ? 0.5 : att.type == AttendanceType.oneAndHalf ? 1.5 : 0.0);
+    final wage = dailyWage *
+        (att.type == AttendanceType.full
+            ? 1.0
+            : att.type == AttendanceType.half
+                ? 0.5
+                : att.type == AttendanceType.oneAndHalf
+                    ? 1.5
+                    : 0.0);
     if (wage > 0) {
       pendingQueue.add(MapEntry(date, wage));
     }
     final adv = advances.firstWhere(
-      (a) => a.date.year == date.year && a.date.month == date.month && a.date.day == date.day,
+      (a) =>
+          a.date.year == date.year &&
+          a.date.month == date.month &&
+          a.date.day == date.day,
       orElse: () => AdvanceRecord(date: date, amount: 0),
     );
     double availableAdvance = adv.amount + carryForward;
@@ -51,40 +68,46 @@ double calculateFinalPending(List<AttendanceRecord> attendance, List<AdvanceReco
 
 class WorkerDashboardScreen extends StatefulWidget {
   final Worker worker;
-  const WorkerDashboardScreen({Key? key, required this.worker}) : super(key: key);
+  const WorkerDashboardScreen({Key? key, required this.worker})
+      : super(key: key);
 
   @override
   State<WorkerDashboardScreen> createState() => _WorkerDashboardScreenState();
 }
 
+class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
+    with WidgetsBindingObserver {
   late List<DateTime> monthDays;
   late DateTime selectedMonth;
   List<AttendanceRecord> attendanceRecords = [];
   List<AdvanceRecord> advanceRecords = [];
-  final SupabaseService _supabaseService = SupabaseService();
+  final SupabaseService supabaseService = SupabaseService();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     selectedMonth = DateTime.now();
-    _updateMonthDays();
-    _loadOnlineData();
+    updateMonthDays();
+    loadOnlineData();
   }
 
-  Future<void> _loadOnlineData() async {
+  Future<void> loadOnlineData() async {
     if (widget.worker.id != null) {
-      final attendanceData = await _supabaseService.fetchAttendance(widget.worker.id!);
-      final advanceData = await _supabaseService.fetchAdvances(widget.worker.id!);
+      final attendanceData =
+          await supabaseService.fetchAttendance(widget.worker.id!);
+      final advanceData =
+          await supabaseService.fetchAdvances(widget.worker.id!);
       setState(() {
-        attendanceRecords = attendanceData.map((e) => AttendanceRecord.fromMap(e)).toList();
-        advanceRecords = advanceData.map((e) => AdvanceRecord.fromMap(e)).toList();
+        attendanceRecords =
+            attendanceData.map((e) => AttendanceRecord.fromMap(e)).toList();
+        advanceRecords =
+            advanceData.map((e) => AdvanceRecord.fromMap(e)).toList();
       });
     }
   }
 
-  void _updateMonthDays() {
-    final firstDay = DateTime(selectedMonth.year, selectedMonth.month, 1);
+  void updateMonthDays() {
     final lastDay = DateTime(selectedMonth.year, selectedMonth.month + 1, 0);
     monthDays = List.generate(
       lastDay.day,
@@ -93,7 +116,8 @@ class WorkerDashboardScreen extends StatefulWidget {
     // Ensure attendance records exist for each day (in-memory only)
     for (final day in monthDays) {
       if (!attendanceRecords.any((a) => isSameDay(a.date, day))) {
-        attendanceRecords.add(AttendanceRecord(date: day, type: AttendanceType.absent));
+        attendanceRecords
+            .add(AttendanceRecord(date: day, type: AttendanceType.absent));
       }
     }
   }
@@ -104,14 +128,7 @@ class WorkerDashboardScreen extends StatefulWidget {
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
-      // Save data when app is paused or detached
-      Provider.of<WorkerListModel>(context, listen: false).saveToHive();
-    }
-  }
+  // No-op: Hive removed, no need to save on lifecycle changes
 
   bool isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
@@ -121,12 +138,12 @@ class WorkerDashboardScreen extends StatefulWidget {
   Widget build(BuildContext context) {
     final today = DateTime.now();
     final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
     final isTablet = screenWidth > 600;
     final headerFontSize = isTablet ? 20.0 : 14.0;
     final cellFontSize = isTablet ? 18.0 : 12.0;
     final padding = isTablet ? 24.0 : 8.0;
-    final isCurrentMonth = selectedMonth.year == today.year && selectedMonth.month == today.month;
+    final isCurrentMonth =
+        selectedMonth.year == today.year && selectedMonth.month == today.month;
 
     // --- Calculate selected month total pending using new advance-clears-oldest-pending logic ---
     double monthPending = calculateFinalPending(
@@ -137,14 +154,19 @@ class WorkerDashboardScreen extends StatefulWidget {
     );
 
     // --- Calculate total advances for the selected month ---
-  double selectedMonthAdvance = advanceRecords
-    .where((a) => a.date.year == selectedMonth.year && a.date.month == selectedMonth.month)
-    .fold(0.0, (sum, a) => sum + a.amount);
+    double selectedMonthAdvance = advanceRecords
+        .where((a) =>
+            a.date.year == selectedMonth.year &&
+            a.date.month == selectedMonth.month)
+        .fold(0.0, (sum, a) => sum + a.amount);
 
     // --- Calculate sum of all negative advances for the selected month ---
     double totalNegativeAdvance = advanceRecords
-      .where((a) => a.date.year == selectedMonth.year && a.date.month == selectedMonth.month && a.amount < 0)
-      .fold(0.0, (sum, a) => sum + a.amount);
+        .where((a) =>
+            a.date.year == selectedMonth.year &&
+            a.date.month == selectedMonth.month &&
+            a.amount < 0)
+        .fold(0.0, (sum, a) => sum + a.amount);
 
     // --- Precompute daily results for the whole month with pending queue logic ---
     Map<DateTime, double> advanceAfterDeduction = {};
@@ -156,8 +178,10 @@ class WorkerDashboardScreen extends StatefulWidget {
         (a) => isSameDay(a.date, day),
         orElse: () => AdvanceRecord(date: day, amount: 0),
       );
-      final attendance = attendanceRecords.firstWhere((a) => isSameDay(a.date, day));
-      final wage = widget.worker.dailyWage * _attendanceMultiplier(attendance.type);
+      final attendance =
+          attendanceRecords.firstWhere((a) => isSameDay(a.date, day));
+      final wage =
+          widget.worker.dailyWage * attendanceMultiplier(attendance.type);
       double availableAdvance = advanceRecord.amount + carryForward;
       // 1. Add today's pending to the queue
       if (wage > 0) {
@@ -190,7 +214,9 @@ class WorkerDashboardScreen extends StatefulWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text('${widget.worker.name} (₹${widget.worker.dailyWage.toStringAsFixed(2)})')),
+      appBar: AppBar(
+          title: Text(
+              '${widget.worker.name} (₹${widget.worker.dailyWage.toStringAsFixed(2)})')),
       backgroundColor: Colors.white,
       body: Padding(
         padding: EdgeInsets.all(padding),
@@ -207,14 +233,17 @@ class WorkerDashboardScreen extends StatefulWidget {
                     onMonthChanged: (newMonth) {
                       setState(() {
                         selectedMonth = newMonth;
-                        _updateMonthDays();
+                        updateMonthDays();
                       });
                     },
                   ),
                   if (totalNegativeAdvance < 0)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
-                      child: Text('Total Negative Advance: ₹${totalNegativeAdvance.abs().toStringAsFixed(2)}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                      child: Text(
+                          'Total Negative Advance: ₹${totalNegativeAdvance.abs().toStringAsFixed(2)}',
+                          style: const TextStyle(
+                              color: Colors.red, fontWeight: FontWeight.bold)),
                     ),
                 ],
               ),
@@ -231,18 +260,43 @@ class WorkerDashboardScreen extends StatefulWidget {
                       headingRowHeight: isTablet ? 60 : 40,
                       dataRowHeight: isTablet ? 80 : 60,
                       columns: [
-                        DataColumn(label: Text('Date', style: TextStyle(fontSize: headerFontSize, fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Attendance', style: TextStyle(fontSize: headerFontSize, fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Wage', style: TextStyle(fontSize: headerFontSize, fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Advance', style: TextStyle(fontSize: headerFontSize, fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Remaining Advance', style: TextStyle(fontSize: headerFontSize, fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Payment', style: TextStyle(fontSize: headerFontSize, fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Date',
+                                style: TextStyle(
+                                    fontSize: headerFontSize,
+                                    fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Attendance',
+                                style: TextStyle(
+                                    fontSize: headerFontSize,
+                                    fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Wage',
+                                style: TextStyle(
+                                    fontSize: headerFontSize,
+                                    fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Advance',
+                                style: TextStyle(
+                                    fontSize: headerFontSize,
+                                    fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Remaining Advance',
+                                style: TextStyle(
+                                    fontSize: headerFontSize,
+                                    fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Payment',
+                                style: TextStyle(
+                                    fontSize: headerFontSize,
+                                    fontWeight: FontWeight.bold))),
                       ],
                       rows: [
                         ...monthDays.map((date) {
-                          final isFuture = date.isAfter(DateTime(today.year, today.month, today.day));
-                          final attendance = attendanceRecords.firstWhere((a) => isSameDay(a.date, date));
-                          final wageForDay = widget.worker.dailyWage * _attendanceMultiplier(attendance.type);
+                          final attendance = attendanceRecords
+                              .firstWhere((a) => isSameDay(a.date, date));
+                          final wageForDay = widget.worker.dailyWage *
+                              attendanceMultiplier(attendance.type);
                           final advanceRecord = advanceRecords.firstWhere(
                             (a) => isSameDay(a.date, date),
                             orElse: () => AdvanceRecord(date: date, amount: 0),
@@ -250,17 +304,25 @@ class WorkerDashboardScreen extends StatefulWidget {
                           // Calculate available advance for this day (advance + carry-forward)
                           double carryForward = 0.0;
                           if (date.day > 1) {
-                            final prevDate = DateTime(date.year, date.month, date.day - 1);
-                            carryForward = advanceAfterDeduction[prevDate] ?? 0.0;
+                            final prevDate =
+                                DateTime(date.year, date.month, date.day - 1);
+                            carryForward =
+                                advanceAfterDeduction[prevDate] ?? 0.0;
                           }
-                          final availableAdvance = advanceRecord.amount + carryForward;
-                          double usedAdvance = availableAdvance >= wageForDay ? wageForDay : availableAdvance;
-                          double remainingAdvance = availableAdvance - usedAdvance;
+                          final availableAdvance =
+                              advanceRecord.amount + carryForward;
+                          double usedAdvance = availableAdvance >= wageForDay
+                              ? wageForDay
+                              : availableAdvance;
+                          double remainingAdvance =
+                              availableAdvance - usedAdvance;
                           double pending = pendingForDayMap[date] ?? 0.0;
                           // Store carry-forward for next day
-                          advanceAfterDeduction[date] = remainingAdvance > 0 ? remainingAdvance : 0.0;
+                          advanceAfterDeduction[date] =
+                              remainingAdvance > 0 ? remainingAdvance : 0.0;
                           return DataRow(cells: [
-                            DataCell(Text(DateFormat('dd MMM (E)').format(date), style: TextStyle(fontSize: cellFontSize))),
+                            DataCell(Text(DateFormat('dd MMM (E)').format(date),
+                                style: TextStyle(fontSize: cellFontSize))),
                             DataCell(!isCurrentMonth || !date.isAfter(today)
                                 ? AttendanceSelector(
                                     attendance: attendance,
@@ -269,39 +331,63 @@ class WorkerDashboardScreen extends StatefulWidget {
                                         attendance.type = type;
                                       });
                                       if (widget.worker.id != null) {
-                                        await _supabaseService.addAttendance(widget.worker.id!, attendance);
+                                        await supabaseService.addAttendance(
+                                            widget.worker.id!, attendance);
                                       }
                                     },
-                                    editable: !isCurrentMonth || !date.isAfter(today),
+                                    editable:
+                                        !isCurrentMonth || !date.isAfter(today),
                                   )
-                                : Text('-', style: TextStyle(fontSize: cellFontSize))),
-                            DataCell(Text('₹${wageForDay.toStringAsFixed(2)}', style: TextStyle(fontSize: cellFontSize))),
+                                : Text('-',
+                                    style: TextStyle(fontSize: cellFontSize))),
+                            DataCell(Text('₹${wageForDay.toStringAsFixed(2)}',
+                                style: TextStyle(fontSize: cellFontSize))),
                             DataCell(!isCurrentMonth || !date.isAfter(today)
                                 ? AdvanceEditor(
                                     worker: widget.worker,
                                     date: date,
-                                    editable: !isCurrentMonth || !date.isAfter(today),
+                                    editable:
+                                        !isCurrentMonth || !date.isAfter(today),
                                     onAdvanceChanged: (newAdvance) async {
                                       setState(() {
-                                        final idx = advanceRecords.indexWhere((a) => isSameDay(a.date, date));
+                                        final idx = advanceRecords.indexWhere(
+                                            (a) => isSameDay(a.date, date));
                                         if (idx >= 0) {
-                                          advanceRecords[idx].amount = newAdvance;
+                                          advanceRecords[idx].amount =
+                                              newAdvance;
                                         } else {
-                                          advanceRecords.add(AdvanceRecord(date: date, amount: newAdvance));
+                                          advanceRecords.add(AdvanceRecord(
+                                              date: date, amount: newAdvance));
                                         }
                                       });
                                       if (widget.worker.id != null) {
-                                        await _supabaseService.addAdvance(widget.worker.id!, AdvanceRecord(date: date, amount: newAdvance));
+                                        await supabaseService.addAdvance(
+                                            widget.worker.id!,
+                                            AdvanceRecord(
+                                                date: date,
+                                                amount: newAdvance));
                                       }
                                     },
                                   )
-                                : Text('-', style: TextStyle(fontSize: cellFontSize))),
-                            DataCell(Text(remainingAdvance > 0 ? remainingAdvance.toStringAsFixed(2) : '0.00', style: TextStyle(fontSize: cellFontSize))),
+                                : Text('-',
+                                    style: TextStyle(fontSize: cellFontSize))),
+                            DataCell(Text(
+                                remainingAdvance > 0
+                                    ? remainingAdvance.toStringAsFixed(2)
+                                    : '0.00',
+                                style: TextStyle(fontSize: cellFontSize))),
                             DataCell(attendance.type == AttendanceType.absent
                                 ? const Text('')
                                 : (pending <= 0
-                                    ? const Text('Paid', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))
-                                    : Text('Pending ₹${pending.toStringAsFixed(2)}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)))),
+                                    ? const Text('Paid',
+                                        style: TextStyle(
+                                            color: Colors.green,
+                                            fontWeight: FontWeight.bold))
+                                    : Text(
+                                        'Pending ₹${pending.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                            color: Colors.orange,
+                                            fontWeight: FontWeight.bold)))),
                           ]);
                         }),
                         // --- Add summary row for selected month pending ---
@@ -315,39 +401,67 @@ class WorkerDashboardScreen extends StatefulWidget {
                             DataCell(Container()), // Remaining Advance
                             DataCell(
                               Center(
-                                child: (selectedMonthAdvance > widget.worker.dailyWage * monthDays.length)
+                                child: (selectedMonthAdvance >
+                                        widget.worker.dailyWage *
+                                            monthDays.length)
                                     ? Padding(
-                                        padding: const EdgeInsets.only(top: 4.0),
+                                        padding:
+                                            const EdgeInsets.only(top: 4.0),
                                         child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 6),
                                           decoration: BoxDecoration(
                                             color: Colors.blue.shade100,
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
                                           ),
-                                          child: Text('Advance Balance: ₹${(selectedMonthAdvance - widget.worker.dailyWage * monthDays.length).toStringAsFixed(2)}', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                                          child: Text(
+                                              'Advance Balance: ₹${(selectedMonthAdvance - widget.worker.dailyWage * monthDays.length).toStringAsFixed(2)}',
+                                              style: const TextStyle(
+                                                  color: Colors.blue,
+                                                  fontWeight: FontWeight.bold)),
                                         ),
                                       )
                                     : (monthPending == 0)
                                         ? Padding(
-                                            padding: const EdgeInsets.only(top: 4.0),
+                                            padding:
+                                                const EdgeInsets.only(top: 4.0),
                                             child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6),
                                               decoration: BoxDecoration(
                                                 color: Colors.green.shade100,
-                                                borderRadius: BorderRadius.circular(12),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
                                               ),
-                                              child: const Text('Clear', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                                              child: const Text('Clear',
+                                                  style: TextStyle(
+                                                      color: Colors.green,
+                                                      fontWeight:
+                                                          FontWeight.bold)),
                                             ),
                                           )
                                         : Padding(
-                                            padding: const EdgeInsets.only(top: 4.0),
+                                            padding:
+                                                const EdgeInsets.only(top: 4.0),
                                             child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6),
                                               decoration: BoxDecoration(
                                                 color: Colors.orange.shade100,
-                                                borderRadius: BorderRadius.circular(12),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
                                               ),
-                                              child: Text('Pending ₹${monthPending.toStringAsFixed(2)}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                                              child: Text(
+                                                  'Pending ₹${monthPending.toStringAsFixed(2)}',
+                                                  style: const TextStyle(
+                                                      color: Colors.orange,
+                                                      fontWeight:
+                                                          FontWeight.bold)),
                                             ),
                                           ),
                               ),
@@ -366,7 +480,9 @@ class WorkerDashboardScreen extends StatefulWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Text('Advance (${DateFormat('MMM yyyy').format(selectedMonth)}): ₹${selectedMonthAdvance.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(
+                      'Advance (${DateFormat('MMM yyyy').format(selectedMonth)}): ₹${selectedMonthAdvance.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(width: 24),
                 ],
               ),
@@ -377,7 +493,7 @@ class WorkerDashboardScreen extends StatefulWidget {
     );
   }
 
-  double _attendanceMultiplier(AttendanceType type) {
+  double attendanceMultiplier(AttendanceType type) {
     switch (type) {
       case AttendanceType.full:
         return 1.0;
@@ -389,4 +505,4 @@ class WorkerDashboardScreen extends StatefulWidget {
         return 0.0;
     }
   }
-} 
+}
