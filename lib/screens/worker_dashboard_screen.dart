@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/worker.dart';
 import '../models/attendance.dart';
 import '../models/payment.dart';
+import '../services/supabase_service.dart';
 import '../widgets/attendance_selector.dart';
 import '../widgets/wage_display.dart';
 import '../widgets/advance_editor.dart';
@@ -56,9 +57,11 @@ class WorkerDashboardScreen extends StatefulWidget {
   State<WorkerDashboardScreen> createState() => _WorkerDashboardScreenState();
 }
 
-class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> with WidgetsBindingObserver {
   late List<DateTime> monthDays;
   late DateTime selectedMonth;
+  List<AttendanceRecord> attendanceRecords = [];
+  List<AdvanceRecord> advanceRecords = [];
+  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -66,6 +69,18 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> with Widg
     WidgetsBinding.instance.addObserver(this);
     selectedMonth = DateTime.now();
     _updateMonthDays();
+    _loadOnlineData();
+  }
+
+  Future<void> _loadOnlineData() async {
+    if (widget.worker.id != null) {
+      final attendanceData = await _supabaseService.fetchAttendance(widget.worker.id!);
+      final advanceData = await _supabaseService.fetchAdvances(widget.worker.id!);
+      setState(() {
+        attendanceRecords = attendanceData.map((e) => AttendanceRecord.fromMap(e)).toList();
+        advanceRecords = advanceData.map((e) => AdvanceRecord.fromMap(e)).toList();
+      });
+    }
   }
 
   void _updateMonthDays() {
@@ -75,17 +90,11 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> with Widg
       lastDay.day,
       (i) => DateTime(selectedMonth.year, selectedMonth.month, i + 1),
     );
-    // Ensure attendance records exist for each day
-    bool hasNewRecords = false;
+    // Ensure attendance records exist for each day (in-memory only)
     for (final day in monthDays) {
-      if (!widget.worker.attendance.any((a) => isSameDay(a.date, day))) {
-        widget.worker.attendance.add(AttendanceRecord(date: day, type: AttendanceType.absent));
-        hasNewRecords = true;
+      if (!attendanceRecords.any((a) => isSameDay(a.date, day))) {
+        attendanceRecords.add(AttendanceRecord(date: day, type: AttendanceType.absent));
       }
-    }
-    // Save to Hive if new records were added
-    if (hasNewRecords) {
-      Provider.of<WorkerListModel>(context, listen: false).saveToHive();
     }
   }
 
@@ -121,19 +130,19 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> with Widg
 
     // --- Calculate selected month total pending using new advance-clears-oldest-pending logic ---
     double monthPending = calculateFinalPending(
-      widget.worker.attendance,
-      widget.worker.advances,
+      attendanceRecords,
+      advanceRecords,
       widget.worker.dailyWage,
       selectedMonth,
     );
 
     // --- Calculate total advances for the selected month ---
-    double selectedMonthAdvance = widget.worker.advances
-        .where((a) => a.date.year == selectedMonth.year && a.date.month == selectedMonth.month)
-        .fold(0.0, (sum, a) => sum + a.amount);
+  double selectedMonthAdvance = advanceRecords
+    .where((a) => a.date.year == selectedMonth.year && a.date.month == selectedMonth.month)
+    .fold(0.0, (sum, a) => sum + a.amount);
 
     // --- Calculate sum of all negative advances for the selected month ---
-    double totalNegativeAdvance = widget.worker.advances
+    double totalNegativeAdvance = advanceRecords
       .where((a) => a.date.year == selectedMonth.year && a.date.month == selectedMonth.month && a.amount < 0)
       .fold(0.0, (sum, a) => sum + a.amount);
 
@@ -143,11 +152,11 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> with Widg
     List<MapEntry<DateTime, double>> pendingQueue = [];
     double carryForward = 0.0;
     for (final day in monthDays) {
-      final advanceRecord = widget.worker.advances.firstWhere(
+      final advanceRecord = advanceRecords.firstWhere(
         (a) => isSameDay(a.date, day),
         orElse: () => AdvanceRecord(date: day, amount: 0),
       );
-      final attendance = widget.worker.attendance.firstWhere((a) => isSameDay(a.date, day));
+      final attendance = attendanceRecords.firstWhere((a) => isSameDay(a.date, day));
       final wage = widget.worker.dailyWage * _attendanceMultiplier(attendance.type);
       double availableAdvance = advanceRecord.amount + carryForward;
       // 1. Add today's pending to the queue
@@ -232,9 +241,9 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> with Widg
                       rows: [
                         ...monthDays.map((date) {
                           final isFuture = date.isAfter(DateTime(today.year, today.month, today.day));
-                          final attendance = widget.worker.attendance.firstWhere((a) => isSameDay(a.date, date));
+                          final attendance = attendanceRecords.firstWhere((a) => isSameDay(a.date, date));
                           final wageForDay = widget.worker.dailyWage * _attendanceMultiplier(attendance.type);
-                          final advanceRecord = widget.worker.advances.firstWhere(
+                          final advanceRecord = advanceRecords.firstWhere(
                             (a) => isSameDay(a.date, date),
                             orElse: () => AdvanceRecord(date: date, amount: 0),
                           );
@@ -255,11 +264,13 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> with Widg
                             DataCell(!isCurrentMonth || !date.isAfter(today)
                                 ? AttendanceSelector(
                                     attendance: attendance,
-                                    onChanged: (type) {
+                                    onChanged: (type) async {
                                       setState(() {
                                         attendance.type = type;
                                       });
-                                      Provider.of<WorkerListModel>(context, listen: false).saveToHive();
+                                      if (widget.worker.id != null) {
+                                        await _supabaseService.addAttendance(widget.worker.id!, attendance);
+                                      }
                                     },
                                     editable: !isCurrentMonth || !date.isAfter(today),
                                   )
@@ -270,16 +281,18 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> with Widg
                                     worker: widget.worker,
                                     date: date,
                                     editable: !isCurrentMonth || !date.isAfter(today),
-                                    onAdvanceChanged: (newAdvance) {
+                                    onAdvanceChanged: (newAdvance) async {
                                       setState(() {
-                                        final idx = widget.worker.advances.indexWhere((a) => isSameDay(a.date, date));
+                                        final idx = advanceRecords.indexWhere((a) => isSameDay(a.date, date));
                                         if (idx >= 0) {
-                                          widget.worker.advances[idx].amount = newAdvance;
+                                          advanceRecords[idx].amount = newAdvance;
                                         } else {
-                                          widget.worker.advances.add(AdvanceRecord(date: date, amount: newAdvance));
+                                          advanceRecords.add(AdvanceRecord(date: date, amount: newAdvance));
                                         }
                                       });
-                                      Provider.of<WorkerListModel>(context, listen: false).saveToHive();
+                                      if (widget.worker.id != null) {
+                                        await _supabaseService.addAdvance(widget.worker.id!, AdvanceRecord(date: date, amount: newAdvance));
+                                      }
                                     },
                                   )
                                 : Text('-', style: TextStyle(fontSize: cellFontSize))),
@@ -293,7 +306,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> with Widg
                         }),
                         // --- Add summary row for selected month pending ---
                         DataRow(
-                          color: MaterialStateProperty.all(Colors.transparent),
+                          color: WidgetStateProperty.all(Colors.transparent),
                           cells: [
                             DataCell(Container()), // Date
                             DataCell(Container()), // Attendance
@@ -353,7 +366,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> with Widg
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Text('Advance (${DateFormat('MMM yyyy').format(selectedMonth)}): ₹${selectedMonthAdvance.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('Advance (${DateFormat('MMM yyyy').format(selectedMonth)}): ₹${selectedMonthAdvance.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(width: 24),
                 ],
               ),

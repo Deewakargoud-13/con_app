@@ -21,4 +21,18 @@ class AttendanceRecord extends HiveObject {
   AttendanceType type;
 
   AttendanceRecord({required this.date, required this.type});
-} 
+
+  factory AttendanceRecord.fromMap(Map<String, dynamic> map) {
+    return AttendanceRecord(
+      date: DateTime.parse(map['date']),
+      type: AttendanceType.values.firstWhere((e) => e.name == map['type']),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'date': date.toIso8601String(),
+      'type': type.name,
+    };
+  }
+}
