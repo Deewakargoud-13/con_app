@@ -3,22 +3,36 @@ import 'package:provider/provider.dart';
 import '../models/worker.dart';
 import '../models/attendance.dart';
 
-double calculateFinalPending(List<AttendanceRecord> attendance, List<AdvanceRecord> advances, double dailyWage, DateTime month) {
+double calculateFinalPending(List<AttendanceRecord> attendance,
+    List<AdvanceRecord> advances, double dailyWage, DateTime month) {
   final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
   List<MapEntry<DateTime, double>> pendingQueue = [];
   double carryForward = 0.0;
   for (int i = 1; i <= daysInMonth; i++) {
     final date = DateTime(month.year, month.month, i);
     final att = attendance.firstWhere(
-      (a) => a.date.year == date.year && a.date.month == date.month && a.date.day == date.day,
+      (a) =>
+          a.date.year == date.year &&
+          a.date.month == date.month &&
+          a.date.day == date.day,
       orElse: () => AttendanceRecord(date: date, type: AttendanceType.absent),
     );
-    final wage = dailyWage * (att.type == AttendanceType.full ? 1.0 : att.type == AttendanceType.half ? 0.5 : att.type == AttendanceType.oneAndHalf ? 1.5 : 0.0);
+    final wage = dailyWage *
+        (att.type == AttendanceType.full
+            ? 1.0
+            : att.type == AttendanceType.half
+                ? 0.5
+                : att.type == AttendanceType.oneAndHalf
+                    ? 1.5
+                    : 0.0);
     if (wage > 0) {
       pendingQueue.add(MapEntry(date, wage));
     }
     final adv = advances.firstWhere(
-      (a) => a.date.year == date.year && a.date.month == date.month && a.date.day == date.day,
+      (a) =>
+          a.date.year == date.year &&
+          a.date.month == date.month &&
+          a.date.day == date.day,
       orElse: () => AdvanceRecord(date: date, amount: 0),
     );
     double availableAdvance = adv.amount + carryForward;
@@ -66,13 +80,27 @@ class MonthlyReportScreen extends StatelessWidget {
       for (int i = 1; i <= daysInMonth; i++) {
         final date = DateTime(currentYear, currentMonth, i);
         final attendance = worker.attendance.firstWhere(
-          (a) => a.date.year == date.year && a.date.month == date.month && a.date.day == date.day,
-          orElse: () => AttendanceRecord(date: date, type: AttendanceType.absent),
+          (a) =>
+              a.date.year == date.year &&
+              a.date.month == date.month &&
+              a.date.day == date.day,
+          orElse: () =>
+              AttendanceRecord(date: date, type: AttendanceType.absent),
         );
         if (attendance.type != AttendanceType.absent) presentDays++;
-        final wageForDay = worker.dailyWage * (attendance.type == AttendanceType.full ? 1.0 : attendance.type == AttendanceType.half ? 0.5 : attendance.type == AttendanceType.oneAndHalf ? 1.5 : 0.0);
+        final wageForDay = worker.dailyWage *
+            (attendance.type == AttendanceType.full
+                ? 1.0
+                : attendance.type == AttendanceType.half
+                    ? 0.5
+                    : attendance.type == AttendanceType.oneAndHalf
+                        ? 1.5
+                        : 0.0);
         final advanceRecord = worker.advances.firstWhere(
-          (a) => a.date.year == date.year && a.date.month == date.month && a.date.day == date.day,
+          (a) =>
+              a.date.year == date.year &&
+              a.date.month == date.month &&
+              a.date.day == date.day,
           orElse: () => AdvanceRecord(date: date, amount: 0),
         );
         double availableAdvance = advanceRecord.amount + carryForward;
@@ -103,7 +131,11 @@ class MonthlyReportScreen extends StatelessWidget {
         // 4. Carry forward any leftover advance
         carryForward = availableAdvance;
       }
-      double totalPending = calculateFinalPending(worker.attendance, worker.advances, worker.dailyWage, DateTime(currentYear, currentMonth));
+      double totalPending = calculateFinalPending(
+          worker.attendance,
+          worker.advances,
+          worker.dailyWage,
+          DateTime(currentYear, currentMonth));
       return {
         'name': worker.name,
         'presentDays': presentDays,
@@ -115,11 +147,43 @@ class MonthlyReportScreen extends StatelessWidget {
     }).toList();
 
     // Correctly sum all workers' pending values for the month
-    totalAllPending = reportRows.fold(0.0, (sum, row) => sum + (row['pending'] as double));
+    totalAllPending =
+        reportRows.fold(0.0, (sum, row) => sum + (row['pending'] as double));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Monthly Report')),
-      backgroundColor: Colors.white,
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text('Menu',
+                  style: TextStyle(color: Colors.white, fontSize: 24)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.people),
+              title: const Text('Workers'),
+              onTap: () {
+                Navigator.popUntil(context, (route) => route.isFirst);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.bar_chart),
+              title: const Text('Monthly Report'),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+      appBar: AppBar(
+        title: const Text('Monthly Report'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.blue.shade700,
+      ),
+      backgroundColor: Colors.grey[100],
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -127,84 +191,172 @@ class MonthlyReportScreen extends StatelessWidget {
             Expanded(
               child: ListView.separated(
                 itemCount: reportRows.length,
-                separatorBuilder: (_, __) => const Divider(),
+                separatorBuilder: (_, __) => const SizedBox(height: 16),
                 itemBuilder: (context, index) {
                   final row = reportRows[index];
-                  return Card(
-                    color: Colors.blue.shade50,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    child: ListTile(
-                      title: Text(row['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Total Wage: ₹${row['totalWage'].toStringAsFixed(2)}'),
-                          Text('Total Advance: ₹${row['totalAdvance'].toStringAsFixed(2)}'),
-                          Text('Days Present: ${row['presentDays']}'),
-                          Text('Remaining Advance: ₹${row['remainingAdvance'].toStringAsFixed(2)}'),
-                          (row['totalAdvance'] > row['totalWage'])
-                              ? Padding(
-                                  padding: const EdgeInsets.only(top: 4.0),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blueGrey.withOpacity(0.07),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.person_outline,
+                                color: Colors.blue.shade700, size: 28),
+                            const SizedBox(width: 10),
+                            Text(row['name'],
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: Colors.blue.shade700)),
+                            const Spacer(),
+                            Icon(Icons.calendar_today_outlined,
+                                size: 18, color: Colors.blueGrey.shade300),
+                            const SizedBox(width: 4),
+                            Text('${row['presentDays']} days',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.blueGrey.shade400)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Icon(Icons.attach_money,
+                                color: Colors.green.shade400, size: 20),
+                            const SizedBox(width: 4),
+                            Text('Wage: ',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.blueGrey.shade600)),
+                            Text('₹${row['totalWage'].toStringAsFixed(2)}',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green.shade700)),
+                            const SizedBox(width: 18),
+                            Icon(Icons.account_balance_wallet_outlined,
+                                color: Colors.orange.shade400, size: 20),
+                            const SizedBox(width: 4),
+                            Text('Advance: ',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.blueGrey.shade600)),
+                            Text('₹${row['totalAdvance'].toStringAsFixed(2)}',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange.shade700)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Icon(Icons.pending_actions,
+                                color: Colors.orange.shade300, size: 20),
+                            const SizedBox(width: 4),
+                            Text('Pending: ',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.blueGrey.shade600)),
+                            Text('₹${row['pending'].toStringAsFixed(2)}',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange.shade700)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        (row['totalAdvance'] > row['totalWage'])
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                    'Advance Balance: ₹${(row['totalAdvance'] - row['totalWage']).toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                        color: Colors.blue.shade700,
+                                        fontWeight: FontWeight.bold)),
+                              )
+                            : row['pending'] == 0
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
                                     decoration: BoxDecoration(
-                                      color: Colors.blue.shade100,
+                                      color: Colors.green.shade50,
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: Text('Advance Balance: ₹${(row['totalAdvance'] - row['totalWage']).toStringAsFixed(2)}', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-                                  ),
-                                )
-                              : row['pending'] == 0
-                                  ? Padding(
-                                      padding: const EdgeInsets.only(top: 4.0),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: Colors.green.shade100,
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: const Text('Clear', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                                      ),
-                                    )
-                                  : Padding(
-                                      padding: const EdgeInsets.only(top: 4.0),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: Colors.orange.shade100,
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: Text('Pending ₹${row['pending'].toStringAsFixed(2)}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                                      ),
+                                    child: const Text('Clear',
+                                        style: TextStyle(
+                                            color: Colors.green,
+                                            fontWeight: FontWeight.bold)),
+                                  )
+                                : Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.shade50,
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                        ],
-                      ),
+                                    child: Text(
+                                        'Pending ₹${row['pending'].toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                            color: Colors.orange.shade700,
+                                            fontWeight: FontWeight.bold)),
+                                  ),
+                      ],
                     ),
                   );
                 },
               ),
             ),
-            const SizedBox(height: 16),
-            totalAllPending == 0
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade100,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: const Text('Clear', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 20)),
-                  )
-                : Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade100,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Text('Total Pending: ₹${totalAllPending.toStringAsFixed(2)}', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 20)),
+            const SizedBox(height: 20),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+              decoration: BoxDecoration(
+                color: totalAllPending == 0
+                    ? Colors.green.shade50
+                    : Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blueGrey.withOpacity(0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
+                ],
+              ),
+              child: Center(
+                child: totalAllPending == 0
+                    ? const Text('All Clear',
+                        style: TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20))
+                    : Text(
+                        'Total Pending: ₹${totalAllPending.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                            color: Colors.orange,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20)),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
-} 
+}

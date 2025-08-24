@@ -12,6 +12,7 @@ import '../services/supabase_service.dart';
 import '../widgets/attendance_selector.dart';
 import '../widgets/advance_editor.dart';
 import '../widgets/month_selector.dart';
+import 'monthly_report_screen.dart';
 import 'package:intl/intl.dart';
 
 double calculateFinalPending(List<AttendanceRecord> attendance,
@@ -216,6 +217,35 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
     }
 
     return Scaffold(
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text('Menu',
+                  style: TextStyle(color: Colors.white, fontSize: 24)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.people),
+              title: const Text('Workers'),
+              onTap: () {
+                Navigator.popUntil(context, (route) => route.isFirst);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.bar_chart),
+              title: const Text('Monthly Report'),
+              onTap: () {
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const MonthlyReportScreen()));
+              },
+            ),
+          ],
+        ),
+      ),
       appBar: AppBar(
           title: Text(
               '${widget.worker.name} (₹${widget.worker.dailyWage.toStringAsFixed(2)})')),
