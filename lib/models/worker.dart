@@ -85,7 +85,18 @@ class WorkerListModel extends ChangeNotifier {
     final data = await _supabaseService.fetchWorkers();
     _workers.clear();
     for (var item in data) {
-      _workers.add(Worker.fromMap(item));
+      final worker = Worker.fromMap(item);
+      if (worker.id != null) {
+        // Fetch attendance and advances for this worker
+        final attendanceData =
+            await _supabaseService.fetchAttendance(worker.id!);
+        final advanceData = await _supabaseService.fetchAdvances(worker.id!);
+        worker.attendance =
+            attendanceData.map((e) => AttendanceRecord.fromMap(e)).toList();
+        worker.advances =
+            advanceData.map((e) => AdvanceRecord.fromMap(e)).toList();
+      }
+      _workers.add(worker);
     }
     notifyListeners();
   }

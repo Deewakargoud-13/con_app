@@ -332,12 +332,23 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
                                 ? AttendanceSelector(
                                     attendance: attendance,
                                     onChanged: (type) async {
-                                      setState(() {
-                                        attendance.type = type;
-                                      });
                                       if (widget.worker.id != null) {
+                                        setState(() {
+                                          attendance.type = type;
+                                        });
                                         await supabaseService.addAttendance(
                                             widget.worker.id!, attendance);
+                                        // Reload from Supabase to ensure sync
+                                        final attendanceData =
+                                            await supabaseService
+                                                .fetchAttendance(
+                                                    widget.worker.id!);
+                                        setState(() {
+                                          attendanceRecords = attendanceData
+                                              .map((e) =>
+                                                  AttendanceRecord.fromMap(e))
+                                              .toList();
+                                        });
                                       }
                                     },
                                     editable:
@@ -354,23 +365,34 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
                                     editable:
                                         !isCurrentMonth || !date.isAfter(today),
                                     onAdvanceChanged: (newAdvance) async {
-                                      setState(() {
-                                        final idx = advanceRecords.indexWhere(
-                                            (a) => isSameDay(a.date, date));
-                                        if (idx >= 0) {
-                                          advanceRecords[idx].amount =
-                                              newAdvance;
-                                        } else {
-                                          advanceRecords.add(AdvanceRecord(
-                                              date: date, amount: newAdvance));
-                                        }
-                                      });
                                       if (widget.worker.id != null) {
+                                        setState(() {
+                                          final idx = advanceRecords.indexWhere(
+                                              (a) => isSameDay(a.date, date));
+                                          if (idx >= 0) {
+                                            advanceRecords[idx].amount =
+                                                newAdvance;
+                                          } else {
+                                            advanceRecords.add(AdvanceRecord(
+                                                date: date,
+                                                amount: newAdvance));
+                                          }
+                                        });
                                         await supabaseService.addAdvance(
                                             widget.worker.id!,
                                             AdvanceRecord(
                                                 date: date,
                                                 amount: newAdvance));
+                                        // Reload from Supabase to ensure sync
+                                        final advanceData =
+                                            await supabaseService.fetchAdvances(
+                                                widget.worker.id!);
+                                        setState(() {
+                                          advanceRecords = advanceData
+                                              .map((e) =>
+                                                  AdvanceRecord.fromMap(e))
+                                              .toList();
+                                        });
                                       }
                                     },
                                   )
