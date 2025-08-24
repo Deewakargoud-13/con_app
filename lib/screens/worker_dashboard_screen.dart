@@ -178,8 +178,10 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
         (a) => isSameDay(a.date, day),
         orElse: () => AdvanceRecord(date: day, amount: 0),
       );
-      final attendance =
-          attendanceRecords.firstWhere((a) => isSameDay(a.date, day));
+      final attendance = attendanceRecords.firstWhere(
+        (a) => isSameDay(a.date, day),
+        orElse: () => AttendanceRecord(date: day, type: AttendanceType.absent),
+      );
       final wage =
           widget.worker.dailyWage * attendanceMultiplier(attendance.type);
       double availableAdvance = advanceRecord.amount + carryForward;
@@ -293,8 +295,11 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
                       ],
                       rows: [
                         ...monthDays.map((date) {
-                          final attendance = attendanceRecords
-                              .firstWhere((a) => isSameDay(a.date, date));
+                          final attendance = attendanceRecords.firstWhere(
+                            (a) => isSameDay(a.date, date),
+                            orElse: () => AttendanceRecord(
+                                date: date, type: AttendanceType.absent),
+                          );
                           final wageForDay = widget.worker.dailyWage *
                               attendanceMultiplier(attendance.type);
                           final advanceRecord = advanceRecords.firstWhere(
