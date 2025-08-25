@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/worker.dart';
 import '../models/attendance.dart';
+import '../widgets/app_drawer.dart';
 
 double calculateFinalPending(List<AttendanceRecord> attendance,
     List<AdvanceRecord> advances, double dailyWage, DateTime month) {
@@ -151,32 +152,7 @@ class MonthlyReportScreen extends StatelessWidget {
         reportRows.fold(0.0, (sum, row) => sum + (row['pending'] as double));
 
     return Scaffold(
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(color: Colors.blue),
-              child: Text('Menu',
-                  style: TextStyle(color: Colors.white, fontSize: 24)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.people),
-              title: const Text('Workers'),
-              onTap: () {
-                Navigator.popUntil(context, (route) => route.isFirst);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.bar_chart),
-              title: const Text('Monthly Report'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        ),
-      ),
+      drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Monthly Report'),
         backgroundColor: Colors.white,

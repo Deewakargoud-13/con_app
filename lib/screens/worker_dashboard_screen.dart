@@ -14,6 +14,7 @@ import '../widgets/advance_editor.dart';
 import '../widgets/month_selector.dart';
 import 'monthly_report_screen.dart';
 import 'package:intl/intl.dart';
+import '../widgets/app_drawer.dart';
 
 double calculateFinalPending(List<AttendanceRecord> attendance,
     List<AdvanceRecord> advances, double dailyWage, DateTime month) {
@@ -83,6 +84,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
   List<AttendanceRecord> attendanceRecords = [];
   List<AdvanceRecord> advanceRecords = [];
   final SupabaseService supabaseService = SupabaseService();
+  bool isLoading = true;
 
   @override
   void initState() {
@@ -90,7 +92,17 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
     WidgetsBinding.instance.addObserver(this);
     selectedMonth = DateTime.now();
     updateMonthDays();
-    loadOnlineData();
+    loadDataWithLoading();
+  }
+
+  Future<void> loadDataWithLoading() async {
+    setState(() {
+      isLoading = true;
+    });
+    await loadOnlineData();
+    setState(() {
+      isLoading = false;
+    });
   }
 
   Future<void> loadOnlineData() async {
@@ -217,336 +229,389 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen>
     }
 
     return Scaffold(
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(color: Colors.blue),
-              child: Text('Menu',
-                  style: TextStyle(color: Colors.white, fontSize: 24)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.people),
-              title: const Text('Workers'),
-              onTap: () {
-                Navigator.popUntil(context, (route) => route.isFirst);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.bar_chart),
-              title: const Text('Monthly Report'),
-              onTap: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const MonthlyReportScreen()));
-              },
-            ),
-          ],
-        ),
-      ),
+      drawer: const AppDrawer(),
       appBar: AppBar(
-          title: Text(
-              '${widget.worker.name} (₹${widget.worker.dailyWage.toStringAsFixed(2)})')),
+        title: Text(
+            '${widget.worker.name} (₹${widget.worker.dailyWage.toStringAsFixed(2)})'),
+      ),
       backgroundColor: Colors.white,
-      body: Padding(
-        padding: EdgeInsets.all(padding),
-        child: Column(
-          children: [
-            // --- Month Selector ---
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  MonthSelector(
-                    selectedDate: selectedMonth,
-                    onMonthChanged: (newMonth) {
-                      setState(() {
-                        selectedMonth = newMonth;
-                        updateMonthDays();
-                      });
-                    },
-                  ),
-                  if (totalNegativeAdvance < 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(
-                          'Total Negative Advance: ₹${totalNegativeAdvance.abs().toStringAsFixed(2)}',
-                          style: const TextStyle(
-                              color: Colors.red, fontWeight: FontWeight.bold)),
+      body: isLoading
+          ? Center(
+              child: Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blueGrey.withOpacity(0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
                     ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: screenWidth),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.vertical,
-                    child: DataTable(
-                      columnSpacing: isTablet ? 32 : 12,
-                      headingRowHeight: isTablet ? 60 : 40,
-                      dataRowHeight: isTablet ? 80 : 60,
-                      columns: [
-                        DataColumn(
-                            label: Text('Date',
-                                style: TextStyle(
-                                    fontSize: headerFontSize,
-                                    fontWeight: FontWeight.bold))),
-                        DataColumn(
-                            label: Text('Attendance',
-                                style: TextStyle(
-                                    fontSize: headerFontSize,
-                                    fontWeight: FontWeight.bold))),
-                        DataColumn(
-                            label: Text('Wage',
-                                style: TextStyle(
-                                    fontSize: headerFontSize,
-                                    fontWeight: FontWeight.bold))),
-                        DataColumn(
-                            label: Text('Advance',
-                                style: TextStyle(
-                                    fontSize: headerFontSize,
-                                    fontWeight: FontWeight.bold))),
-                        DataColumn(
-                            label: Text('Remaining Advance',
-                                style: TextStyle(
-                                    fontSize: headerFontSize,
-                                    fontWeight: FontWeight.bold))),
-                        DataColumn(
-                            label: Text('Payment',
-                                style: TextStyle(
-                                    fontSize: headerFontSize,
-                                    fontWeight: FontWeight.bold))),
-                      ],
-                      rows: [
-                        ...monthDays.map((date) {
-                          final attendance = attendanceRecords.firstWhere(
-                            (a) => isSameDay(a.date, date),
-                            orElse: () => AttendanceRecord(
-                                date: date, type: AttendanceType.absent),
-                          );
-                          final wageForDay = widget.worker.dailyWage *
-                              attendanceMultiplier(attendance.type);
-                          final advanceRecord = advanceRecords.firstWhere(
-                            (a) => isSameDay(a.date, date),
-                            orElse: () => AdvanceRecord(date: date, amount: 0),
-                          );
-                          // Calculate available advance for this day (advance + carry-forward)
-                          double carryForward = 0.0;
-                          if (date.day > 1) {
-                            final prevDate =
-                                DateTime(date.year, date.month, date.day - 1);
-                            carryForward =
-                                advanceAfterDeduction[prevDate] ?? 0.0;
-                          }
-                          final availableAdvance =
-                              advanceRecord.amount + carryForward;
-                          double usedAdvance = availableAdvance >= wageForDay
-                              ? wageForDay
-                              : availableAdvance;
-                          double remainingAdvance =
-                              availableAdvance - usedAdvance;
-                          double pending = pendingForDayMap[date] ?? 0.0;
-                          // Store carry-forward for next day
-                          advanceAfterDeduction[date] =
-                              remainingAdvance > 0 ? remainingAdvance : 0.0;
-                          return DataRow(cells: [
-                            DataCell(Text(DateFormat('dd MMM (E)').format(date),
-                                style: TextStyle(fontSize: cellFontSize))),
-                            DataCell(!isCurrentMonth || !date.isAfter(today)
-                                ? AttendanceSelector(
-                                    attendance: attendance,
-                                    onChanged: (type) async {
-                                      if (widget.worker.id != null) {
-                                        setState(() {
-                                          attendance.type = type;
-                                        });
-                                        await supabaseService.addAttendance(
-                                            widget.worker.id!, attendance);
-                                        // Reload from Supabase to ensure sync
-                                        final attendanceData =
-                                            await supabaseService
-                                                .fetchAttendance(
-                                                    widget.worker.id!);
-                                        setState(() {
-                                          attendanceRecords = attendanceData
-                                              .map((e) =>
-                                                  AttendanceRecord.fromMap(e))
-                                              .toList();
-                                        });
-                                      }
-                                    },
-                                    editable:
-                                        !isCurrentMonth || !date.isAfter(today),
-                                  )
-                                : Text('-',
-                                    style: TextStyle(fontSize: cellFontSize))),
-                            DataCell(Text('₹${wageForDay.toStringAsFixed(2)}',
-                                style: TextStyle(fontSize: cellFontSize))),
-                            DataCell(!isCurrentMonth || !date.isAfter(today)
-                                ? AdvanceEditor(
-                                    worker: widget.worker,
-                                    date: date,
-                                    editable:
-                                        !isCurrentMonth || !date.isAfter(today),
-                                    onAdvanceChanged: (newAdvance) async {
-                                      if (widget.worker.id != null) {
-                                        setState(() {
-                                          final idx = advanceRecords.indexWhere(
-                                              (a) => isSameDay(a.date, date));
-                                          if (idx >= 0) {
-                                            advanceRecords[idx].amount =
-                                                newAdvance;
-                                          } else {
-                                            advanceRecords.add(AdvanceRecord(
-                                                date: date,
-                                                amount: newAdvance));
-                                          }
-                                        });
-                                        await supabaseService.addAdvance(
-                                            widget.worker.id!,
-                                            AdvanceRecord(
-                                                date: date,
-                                                amount: newAdvance));
-                                        // Reload from Supabase to ensure sync
-                                        final advanceData =
-                                            await supabaseService.fetchAdvances(
-                                                widget.worker.id!);
-                                        setState(() {
-                                          advanceRecords = advanceData
-                                              .map((e) =>
-                                                  AdvanceRecord.fromMap(e))
-                                              .toList();
-                                        });
-                                      }
-                                    },
-                                  )
-                                : Text('-',
-                                    style: TextStyle(fontSize: cellFontSize))),
-                            DataCell(Text(
-                                remainingAdvance > 0
-                                    ? remainingAdvance.toStringAsFixed(2)
-                                    : '0.00',
-                                style: TextStyle(fontSize: cellFontSize))),
-                            DataCell(attendance.type == AttendanceType.absent
-                                ? const Text('')
-                                : (pending <= 0
-                                    ? const Text('Paid',
-                                        style: TextStyle(
-                                            color: Colors.green,
-                                            fontWeight: FontWeight.bold))
-                                    : Text(
-                                        'Pending ₹${pending.toStringAsFixed(2)}',
-                                        style: const TextStyle(
-                                            color: Colors.orange,
-                                            fontWeight: FontWeight.bold)))),
-                          ]);
-                        }),
-                        // --- Add summary row for selected month pending ---
-                        DataRow(
-                          color: WidgetStateProperty.all(Colors.transparent),
-                          cells: [
-                            DataCell(Container()), // Date
-                            DataCell(Container()), // Attendance
-                            DataCell(Container()), // Wage
-                            DataCell(Container()), // Advance
-                            DataCell(Container()), // Remaining Advance
-                            DataCell(
-                              Center(
-                                child: (selectedMonthAdvance >
-                                        widget.worker.dailyWage *
-                                            monthDays.length)
-                                    ? Padding(
-                                        padding:
-                                            const EdgeInsets.only(top: 4.0),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: Colors.blue.shade100,
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                          child: Text(
-                                              'Advance Balance: ₹${(selectedMonthAdvance - widget.worker.dailyWage * monthDays.length).toStringAsFixed(2)}',
-                                              style: const TextStyle(
-                                                  color: Colors.blue,
-                                                  fontWeight: FontWeight.bold)),
-                                        ),
-                                      )
-                                    : (monthPending == 0)
-                                        ? Padding(
-                                            padding:
-                                                const EdgeInsets.only(top: 4.0),
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6),
-                                              decoration: BoxDecoration(
-                                                color: Colors.green.shade100,
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              child: const Text('Clear',
-                                                  style: TextStyle(
-                                                      color: Colors.green,
-                                                      fontWeight:
-                                                          FontWeight.bold)),
-                                            ),
-                                          )
-                                        : Padding(
-                                            padding:
-                                                const EdgeInsets.only(top: 4.0),
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6),
-                                              decoration: BoxDecoration(
-                                                color: Colors.orange.shade100,
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              child: Text(
-                                                  'Pending ₹${monthPending.toStringAsFixed(2)}',
-                                                  style: const TextStyle(
-                                                      color: Colors.orange,
-                                                      fontWeight:
-                                                          FontWeight.bold)),
-                                            ),
-                                          ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3.5,
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Colors.blue.shade700),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'Loading worker data...',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.blueGrey,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            // --- Add summary for advances ---
-            Padding(
-              padding: const EdgeInsets.only(top: 12.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+            )
+          : Padding(
+              padding: EdgeInsets.all(padding),
+              child: Column(
                 children: [
-                  Text(
-                      'Advance (${DateFormat('MMM yyyy').format(selectedMonth)}): ₹${selectedMonthAdvance.toStringAsFixed(2)}',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 24),
+                  // --- Month Selector ---
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        MonthSelector(
+                          selectedDate: selectedMonth,
+                          onMonthChanged: (newMonth) {
+                            setState(() {
+                              selectedMonth = newMonth;
+                              updateMonthDays();
+                            });
+                          },
+                        ),
+                        if (totalNegativeAdvance < 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                                'Total Negative Advance: ₹${totalNegativeAdvance.abs().toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minWidth: screenWidth),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: DataTable(
+                            columnSpacing: isTablet ? 32 : 12,
+                            headingRowHeight: isTablet ? 60 : 40,
+                            dataRowHeight: isTablet ? 80 : 60,
+                            columns: [
+                              DataColumn(
+                                  label: Text('Date',
+                                      style: TextStyle(
+                                          fontSize: headerFontSize,
+                                          fontWeight: FontWeight.bold))),
+                              DataColumn(
+                                  label: Text('Attendance',
+                                      style: TextStyle(
+                                          fontSize: headerFontSize,
+                                          fontWeight: FontWeight.bold))),
+                              DataColumn(
+                                  label: Text('Wage',
+                                      style: TextStyle(
+                                          fontSize: headerFontSize,
+                                          fontWeight: FontWeight.bold))),
+                              DataColumn(
+                                  label: Text('Advance',
+                                      style: TextStyle(
+                                          fontSize: headerFontSize,
+                                          fontWeight: FontWeight.bold))),
+                              DataColumn(
+                                  label: Text('Remaining Advance',
+                                      style: TextStyle(
+                                          fontSize: headerFontSize,
+                                          fontWeight: FontWeight.bold))),
+                              DataColumn(
+                                  label: Text('Payment',
+                                      style: TextStyle(
+                                          fontSize: headerFontSize,
+                                          fontWeight: FontWeight.bold))),
+                            ],
+                            rows: [
+                              ...monthDays.map((date) {
+                                final attendance = attendanceRecords.firstWhere(
+                                  (a) => isSameDay(a.date, date),
+                                  orElse: () => AttendanceRecord(
+                                      date: date, type: AttendanceType.absent),
+                                );
+                                final wageForDay = widget.worker.dailyWage *
+                                    attendanceMultiplier(attendance.type);
+                                final advanceRecord = advanceRecords.firstWhere(
+                                  (a) => isSameDay(a.date, date),
+                                  orElse: () =>
+                                      AdvanceRecord(date: date, amount: 0),
+                                );
+                                // Calculate available advance for this day (advance + carry-forward)
+                                double carryForward = 0.0;
+                                if (date.day > 1) {
+                                  final prevDate = DateTime(
+                                      date.year, date.month, date.day - 1);
+                                  carryForward =
+                                      advanceAfterDeduction[prevDate] ?? 0.0;
+                                }
+                                final availableAdvance =
+                                    advanceRecord.amount + carryForward;
+                                double usedAdvance =
+                                    availableAdvance >= wageForDay
+                                        ? wageForDay
+                                        : availableAdvance;
+                                double remainingAdvance =
+                                    availableAdvance - usedAdvance;
+                                double pending = pendingForDayMap[date] ?? 0.0;
+                                // Store carry-forward for next day
+                                advanceAfterDeduction[date] =
+                                    remainingAdvance > 0
+                                        ? remainingAdvance
+                                        : 0.0;
+                                return DataRow(cells: [
+                                  DataCell(Text(
+                                      DateFormat('dd MMM (E)').format(date),
+                                      style:
+                                          TextStyle(fontSize: cellFontSize))),
+                                  DataCell(!isCurrentMonth ||
+                                          !date.isAfter(today)
+                                      ? AttendanceSelector(
+                                          attendance: attendance,
+                                          onChanged: (type) async {
+                                            if (widget.worker.id != null) {
+                                              setState(() {
+                                                attendance.type = type;
+                                              });
+                                              await supabaseService
+                                                  .addAttendance(
+                                                      widget.worker.id!,
+                                                      attendance);
+                                              // Reload from Supabase to ensure sync
+                                              final attendanceData =
+                                                  await supabaseService
+                                                      .fetchAttendance(
+                                                          widget.worker.id!);
+                                              setState(() {
+                                                attendanceRecords =
+                                                    attendanceData
+                                                        .map((e) =>
+                                                            AttendanceRecord
+                                                                .fromMap(e))
+                                                        .toList();
+                                              });
+                                            }
+                                          },
+                                          editable: !isCurrentMonth ||
+                                              !date.isAfter(today),
+                                        )
+                                      : Text('-',
+                                          style: TextStyle(
+                                              fontSize: cellFontSize))),
+                                  DataCell(Text(
+                                      '₹${wageForDay.toStringAsFixed(2)}',
+                                      style:
+                                          TextStyle(fontSize: cellFontSize))),
+                                  DataCell(!isCurrentMonth ||
+                                          !date.isAfter(today)
+                                      ? AdvanceEditor(
+                                          worker: widget.worker,
+                                          date: date,
+                                          editable: !isCurrentMonth ||
+                                              !date.isAfter(today),
+                                          onAdvanceChanged: (newAdvance) async {
+                                            if (widget.worker.id != null) {
+                                              setState(() {
+                                                final idx =
+                                                    advanceRecords.indexWhere(
+                                                        (a) => isSameDay(
+                                                            a.date, date));
+                                                if (idx >= 0) {
+                                                  advanceRecords[idx].amount =
+                                                      newAdvance;
+                                                } else {
+                                                  advanceRecords.add(
+                                                      AdvanceRecord(
+                                                          date: date,
+                                                          amount: newAdvance));
+                                                }
+                                              });
+                                              await supabaseService.addAdvance(
+                                                  widget.worker.id!,
+                                                  AdvanceRecord(
+                                                      date: date,
+                                                      amount: newAdvance));
+                                              // Reload from Supabase to ensure sync
+                                              final advanceData =
+                                                  await supabaseService
+                                                      .fetchAdvances(
+                                                          widget.worker.id!);
+                                              setState(() {
+                                                advanceRecords = advanceData
+                                                    .map((e) =>
+                                                        AdvanceRecord.fromMap(
+                                                            e))
+                                                    .toList();
+                                              });
+                                            }
+                                          },
+                                        )
+                                      : Text('-',
+                                          style: TextStyle(
+                                              fontSize: cellFontSize))),
+                                  DataCell(Text(
+                                      remainingAdvance > 0
+                                          ? remainingAdvance.toStringAsFixed(2)
+                                          : '0.00',
+                                      style:
+                                          TextStyle(fontSize: cellFontSize))),
+                                  DataCell(attendance.type ==
+                                          AttendanceType.absent
+                                      ? const Text('')
+                                      : (pending <= 0
+                                          ? const Text('Paid',
+                                              style: TextStyle(
+                                                  color: Colors.green,
+                                                  fontWeight: FontWeight.bold))
+                                          : Text(
+                                              'Pending ₹${pending.toStringAsFixed(2)}',
+                                              style: const TextStyle(
+                                                  color: Colors.orange,
+                                                  fontWeight:
+                                                      FontWeight.bold)))),
+                                ]);
+                              }),
+                              // --- Add summary row for selected month pending ---
+                              DataRow(
+                                color:
+                                    WidgetStateProperty.all(Colors.transparent),
+                                cells: [
+                                  DataCell(Container()), // Date
+                                  DataCell(Container()), // Attendance
+                                  DataCell(Container()), // Wage
+                                  DataCell(Container()), // Advance
+                                  DataCell(Container()), // Remaining Advance
+                                  DataCell(
+                                    Center(
+                                      child: (selectedMonthAdvance >
+                                              widget.worker.dailyWage *
+                                                  monthDays.length)
+                                          ? Padding(
+                                              padding: const EdgeInsets.only(
+                                                  top: 4.0),
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue.shade100,
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: Text(
+                                                    'Advance Balance: ₹${(selectedMonthAdvance - widget.worker.dailyWage * monthDays.length).toStringAsFixed(2)}',
+                                                    style: const TextStyle(
+                                                        color: Colors.blue,
+                                                        fontWeight:
+                                                            FontWeight.bold)),
+                                              ),
+                                            )
+                                          : (monthPending == 0)
+                                              ? Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          top: 4.0),
+                                                  child: Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          Colors.green.shade100,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              12),
+                                                    ),
+                                                    child: const Text('Clear',
+                                                        style: TextStyle(
+                                                            color: Colors.green,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .bold)),
+                                                  ),
+                                                )
+                                              : Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          top: 4.0),
+                                                  child: Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors
+                                                          .orange.shade100,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              12),
+                                                    ),
+                                                    child: Text(
+                                                        'Pending ₹${monthPending.toStringAsFixed(2)}',
+                                                        style: const TextStyle(
+                                                            color:
+                                                                Colors.orange,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .bold)),
+                                                  ),
+                                                ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // --- Add summary for advances ---
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                            'Advance (${DateFormat('MMM yyyy').format(selectedMonth)}): ₹${selectedMonthAdvance.toStringAsFixed(2)}',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 24),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 
