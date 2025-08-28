@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'theme/app_theme.dart';
 import 'screens/worker_list_screen.dart';
 import 'models/worker.dart';
+import 'navigation/route_observer.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +52,7 @@ class _ConAppState extends State<ConApp> with WidgetsBindingObserver {
         title: 'Contractor Worker App',
         theme: AppTheme.lightTheme,
         home: const WorkerListScreen(),
+        navigatorObservers: [routeObserver],
         debugShowCheckedModeBanner: false,
       ),
     );
