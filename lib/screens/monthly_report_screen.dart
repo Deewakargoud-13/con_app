@@ -67,6 +67,7 @@ class MonthlyReportScreen extends StatefulWidget {
 class _MonthlyReportScreenState extends State<MonthlyReportScreen>
     with RouteAware {
   bool _loading = false;
+  DateTime _selectedMonth = DateTime.now();
 
   @override
   void initState() {
@@ -116,6 +117,146 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen>
     super.dispose();
   }
 
+  String _getMonthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
+    ];
+    return months[month - 1];
+  }
+
+  void _showMonthPicker(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Select Month',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  height: 300,
+                  child: YearPicker(
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2030),
+                    selectedDate: _selectedMonth,
+                    onChanged: (DateTime date) {
+                      Navigator.pop(context);
+                      _showMonthSelector(context, date.year);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showMonthSelector(BuildContext context, int year) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Select Month - $year',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                GridView.builder(
+                  shrinkWrap: true,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 2.5,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                  ),
+                  itemCount: 12,
+                  itemBuilder: (context, index) {
+                    final month = index + 1;
+                    final isSelected = _selectedMonth.year == year &&
+                        _selectedMonth.month == month;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedMonth = DateTime(year, month);
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Colors.blue.shade700
+                              : Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected
+                                ? Colors.blue.shade700
+                                : Colors.blue.shade200,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _getMonthName(month).substring(0, 3),
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.blue.shade700,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final workerList = Provider.of<WorkerListModel>(context);
@@ -128,9 +269,8 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen>
       int presentDays = 0;
       List<MapEntry<DateTime, double>> pendingQueue = [];
       double carryForward = 0.0;
-      final today = DateTime.now();
-      final currentMonth = today.month;
-      final currentYear = today.year;
+      final currentMonth = _selectedMonth.month;
+      final currentYear = _selectedMonth.year;
       final daysInMonth = DateUtils.getDaysInMonth(currentYear, currentMonth);
       for (int i = 1; i <= daysInMonth; i++) {
         final date = DateTime(currentYear, currentMonth, i);
@@ -183,8 +323,6 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen>
         carryForward = availableAdvance;
         totalWage += wageForDay;
         totalAdvance += advanceRecord.amount;
-        // 4. Carry forward any leftover advance
-        carryForward = availableAdvance;
       }
       double totalPending = calculateFinalPending(
           worker.attendance,
@@ -208,11 +346,26 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen>
     return Scaffold(
       drawer: const AppDrawer(),
       appBar: AppBar(
-        title: const Text('Monthly Report'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Monthly Report',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              '${_getMonthName(_selectedMonth.month)} ${_selectedMonth.year}',
+              style: TextStyle(fontSize: 14, color: Colors.blue.shade400),
+            ),
+          ],
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.blue.shade700,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.calendar_month),
+            tooltip: 'Select Month',
+            onPressed: () => _showMonthPicker(context),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
@@ -247,6 +400,67 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen>
                     ],
                   ),
                 ),
+              // Month Navigation
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blueGrey.withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon:
+                          Icon(Icons.chevron_left, color: Colors.blue.shade700),
+                      onPressed: () {
+                        setState(() {
+                          _selectedMonth = DateTime(
+                              _selectedMonth.year, _selectedMonth.month - 1);
+                        });
+                      },
+                    ),
+                    GestureDetector(
+                      onTap: () => _showMonthPicker(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_getMonthName(_selectedMonth.month)} ${_selectedMonth.year}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.chevron_right,
+                          color: Colors.blue.shade700),
+                      onPressed: () {
+                        setState(() {
+                          _selectedMonth = DateTime(
+                              _selectedMonth.year, _selectedMonth.month + 1);
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
               Expanded(
                 child: ListView.separated(
                   itemCount: reportRows.length,
