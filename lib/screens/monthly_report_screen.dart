@@ -79,6 +79,7 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen>
   }
 
   Future<void> _refresh(BuildContext context) async {
+    if (_loading) return; // Prevent multiple simultaneous refreshes
     setState(() => _loading = true);
     try {
       await Provider.of<WorkerListModel>(context, listen: false)
@@ -100,8 +101,7 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen>
 
   @override
   void didPush() {
-    // Screen was pushed, ensure fresh data
-    _refresh(context);
+    // Screen was pushed - no need to refresh as initState already handles this
   }
 
   @override
