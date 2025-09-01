@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
+
 import 'package:provider/provider.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'theme/app_theme.dart';
 import 'screens/worker_list_screen.dart';
 import 'models/worker.dart';
-import 'models/attendance.dart';
-import 'models/payment.dart';
+import 'navigation/route_observer.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
-  Hive.registerAdapter(AttendanceTypeAdapter());
-  Hive.registerAdapter(AttendanceRecordAdapter());
-  Hive.registerAdapter(PaymentRecordAdapter());
-  Hive.registerAdapter(WorkerAdapter());
-  Hive.registerAdapter(AdvanceRecordAdapter());
+  // Initialize Supabase (replace with your actual values)
+  await Supabase.initialize(
+    url:
+        'https://wofalircyjcsjmhyevig.supabase.co', // TODO: Replace with your Supabase project URL
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvZmFsaXJjeWpjc2ptaHlldmlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5NzQ0OTQsImV4cCI6MjA3MTU1MDQ5NH0.FJGsZaDFj7LgBbBVY0d7vBUU3kAjdoEzKxWhB7BjPB8', // TODO: Replace with your Supabase anon/public key
+  );
   final workerListModel = WorkerListModel();
-  await workerListModel.loadFromHive();
+  await workerListModel.loadFromSupabase();
   runApp(ConApp(workerListModel: workerListModel));
 }
 
@@ -29,7 +30,6 @@ class ConApp extends StatefulWidget {
 }
 
 class _ConAppState extends State<ConApp> with WidgetsBindingObserver {
-
   @override
   void initState() {
     super.initState();
@@ -42,14 +42,7 @@ class _ConAppState extends State<ConApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
-      // Save data when app is paused or detached
-      widget.workerListModel.saveToHive();
-    }
-  }
+  // No-op: Hive removed, no need to save on lifecycle changes
 
   @override
   Widget build(BuildContext context) {
@@ -59,8 +52,9 @@ class _ConAppState extends State<ConApp> with WidgetsBindingObserver {
         title: 'Contractor Worker App',
         theme: AppTheme.lightTheme,
         home: const WorkerListScreen(),
+        navigatorObservers: [routeObserver],
         debugShowCheckedModeBanner: false,
       ),
     );
   }
-} 
+}

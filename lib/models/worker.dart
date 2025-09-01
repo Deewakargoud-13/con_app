@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import 'package:hive/hive.dart';
+import '../services/supabase_service.dart';
 import 'attendance.dart';
 import 'payment.dart';
 part 'worker.g.dart';
@@ -12,6 +14,20 @@ class AdvanceRecord extends HiveObject {
   double amount;
 
   AdvanceRecord({required this.date, required this.amount});
+
+  factory AdvanceRecord.fromMap(Map<String, dynamic> map) {
+    return AdvanceRecord(
+      date: DateTime.parse(map['date']),
+      amount: (map['amount'] ?? 0).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'date': date.toIso8601String(),
+      'amount': amount,
+    };
+  }
 }
 
 @HiveType(typeId: 4)
@@ -28,6 +44,7 @@ class Worker extends HiveObject {
   List<PaymentRecord> payments;
   @HiveField(5)
   List<AdvanceRecord> advances;
+  String? id; // Supabase id
 
   Worker({
     required this.name,
@@ -36,45 +53,72 @@ class Worker extends HiveObject {
     List<AttendanceRecord>? attendance,
     List<PaymentRecord>? payments,
     List<AdvanceRecord>? advances,
+    this.id,
   })  : attendance = attendance ?? [],
         payments = payments ?? [],
         advances = advances ?? [];
+
+  factory Worker.fromMap(Map<String, dynamic> map) {
+    return Worker(
+      id: map['id'] as String?,
+      name: map['name'] ?? '',
+      dailyWage: (map['daily_wage'] ?? 0).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'daily_wage': dailyWage,
+    };
+  }
 }
 
 class WorkerListModel extends ChangeNotifier {
   final List<Worker> _workers = [];
+  final SupabaseService _supabaseService = SupabaseService();
 
   List<Worker> get workers => _workers;
 
-  Future<void> loadFromHive() async {
-    final box = await Hive.openBox<Worker>('workers');
+  Future<void> loadFromSupabase() async {
+    final data = await _supabaseService.fetchWorkers();
     _workers.clear();
-    _workers.addAll(box.values);
-    notifyListeners();
-  }
-
-  Future<void> saveToHive() async {
-    final box = await Hive.openBox<Worker>('workers');
-    await box.clear();
-    for (var worker in _workers) {
-      await box.add(worker);
+    for (var item in data) {
+      final worker = Worker.fromMap(item);
+      if (worker.id != null) {
+        // Fetch attendance and advances for this worker
+        final attendanceData =
+            await _supabaseService.fetchAttendance(worker.id!);
+        final advanceData = await _supabaseService.fetchAdvances(worker.id!);
+        worker.attendance =
+            attendanceData.map((e) => AttendanceRecord.fromMap(e)).toList();
+        worker.advances =
+            advanceData.map((e) => AdvanceRecord.fromMap(e)).toList();
+      }
+      _workers.add(worker);
     }
-  }
-
-  void addWorker(Worker worker) {
-    _workers.add(worker);
-    saveToHive();
     notifyListeners();
   }
 
-  void removeWorker(int index) {
-    _workers.removeAt(index);
-    saveToHive();
-    notifyListeners();
+  Future<void> addWorker(Worker worker) async {
+    await _supabaseService.addWorker(worker);
+    await loadFromSupabase();
   }
 
-  void updateWorker() {
-    saveToHive();
-    notifyListeners();
+  Future<void> removeWorker(int index) async {
+    final worker = _workers[index];
+    if (worker.id != null) {
+      await _supabaseService.deleteWorker(worker.id!);
+    }
+    await loadFromSupabase();
   }
-} 
+
+  Future<void> updateWorker(int index, Worker worker) async {
+    final oldWorker = _workers[index];
+    if (oldWorker.id != null) {
+      await _supabaseService.updateWorker(oldWorker.id!, worker);
+    }
+    await loadFromSupabase();
+  }
+}
